@@ -1,49 +1,10 @@
+# /usr/bin/env python
+
 import time
 import argparse
 import sys
 import os
 from xvfbwrapper import Xvfb
-
-try:
-    from qgis.core import Qgis
-except ImportError:
-    from qgis.core import QGis as Qgis
-
-version = int(Qgis.QGIS_VERSION_INT)
-
-if version < 30000:
-    from qgis.core import (QgsDataSourceURI as QgsDataSourceUri,
-                           QgsVectorLayer,
-                           QgsProject,
-                           QgsMapLayerRegistry,
-                           QgsApplication,
-                           QgsMapSettings,
-                           QgsRectangle,
-                           QgsMapRendererCustomPainterJob,
-                           QgsPalLayerSettings,
-                           QgsCoordinateReferenceSystem)
-
-    from qgis.gui import QgsMapCanvas
-
-
-    from PyQt4.QtCore import QSize, Qt
-    from PyQt4.QtGui import QApplication, QImage, QPainter, QColor
-else:
-    from qgis.core import (QgsDataSourceUri,
-                           QgsVectorLayer,
-                           QgsProject,
-                           QgsApplication,
-                           QgsMapSettings,
-                           QgsRectangle,
-                           QgsMapRendererCustomPainterJob,
-                           QgsPalLayerSettings,
-                           QgsCoordinateReferenceSystem)
-
-    from qgis.gui import QgsMapCanvas
-
-    from PyQt5.QtCore import QSize, Qt
-    from PyQt5.QtGui import QImage, QPainter, QColor
-    from PyQt5.QtWidgets import QApplication
 
 
 def init_environment(root):
@@ -55,8 +16,55 @@ def init_environment(root):
     # LD_LIBRARY_PATH
     os.environ['LD_LIBRARY_PATH'] = '{}/lib'.format(root)
 
-    print(os.environ['LD_LIBRARY_PATH'])
-    # os.execv(sys.argv[0], sys.argv)
+    # qgis imports
+    global QgsDataSourceUri
+    global QgsVectorLayer
+    global QgsMapSettings
+    global QSize
+    global QgsCoordinateReferenceSystem
+    global QgsMapCanvas
+    global QImage
+    global Qt
+    global QPainter
+    global QgsMapRendererCustomPainterJob
+
+    try:
+        from qgis.core import Qgis
+    except ImportError:
+        from qgis.core import QGis as Qgis
+
+    version = int(Qgis.QGIS_VERSION_INT)
+
+    if version < 30000:
+        from qgis.core import (QgsDataSourceURI as QgsDataSourceUri,
+                               QgsVectorLayer,
+                               QgsProject,
+                               QgsMapLayerRegistry,
+                               QgsApplication,
+                               QgsMapSettings,
+                               QgsRectangle,
+                               QgsMapRendererCustomPainterJob,
+                               QgsPalLayerSettings,
+                               QgsCoordinateReferenceSystem)
+
+        from qgis.gui import QgsMapCanvas
+
+
+        from PyQt4.QtCore import QSize, Qt
+        from PyQt4.QtGui import QApplication, QImage, QPainter, QColor
+    else:
+        from qgis.core import (QgsDataSourceUri,
+                               QgsVectorLayer,
+                               QgsApplication,
+                               QgsMapSettings,
+                               QgsMapRendererCustomPainterJob,
+                               QgsCoordinateReferenceSystem)
+
+    from qgis.gui import QgsMapCanvas
+
+    from PyQt5.QtCore import QSize, Qt
+    from PyQt5.QtGui import QImage, QPainter, QColor
+    from PyQt5.QtWidgets import QApplication
 
     # init xvfb
     vdisplay = Xvfb()
@@ -67,7 +75,7 @@ def init_environment(root):
     QgsApplication.setPrefixPath(root, True)
     QgsApplication.initQgis()
 
-    return app, vdisplay
+    return version, app, vdisplay
 
 
 def layer(args):
@@ -75,12 +83,12 @@ def layer(args):
     provider = args.provider
 
     uri = QgsDataSourceUri()
-    uri.setConnection( "172.17.0.3", "5432", "data", "root", "root")
+    uri.setConnection( "172.17.0.2", "5432", "data", "root", "root")
     uri.setDataSource("ref", "hydro_bassin", "geoml93", "")
     return QgsVectorLayer( uri.uri(), "layer", provider)
 
 
-def render(vl, output):
+def render(version, vl, output):
 
     # init map setting
     ms = QgsMapSettings()
@@ -94,8 +102,6 @@ def render(vl, output):
     ms.setOutputSize( size )
     ms.setDestinationCrs(crs)
 
-    project = QgsProject.instance()
-
     # init a canvas object
     canvas = QgsMapCanvas()
     canvas.setDestinationCrs(crs)
@@ -105,8 +111,6 @@ def render(vl, output):
 
     # QGIS 3 specific
     if version >= 30000:
-        project.addMapLayers([vl])
-
         canvas.setLayers([vl])
         ms.setLayers([vl])
 
@@ -136,7 +140,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # init environment
-    app, vdisplay = init_environment(args.root)
+    version, app, vdisplay = init_environment(args.root)
 
     # get layer
     vl = layer(args)
@@ -149,7 +153,7 @@ if __name__ == "__main__":
     print('Feature count: {}'.format(vl.featureCount()))
 
     # render
-    t = render(vl, args.output)
+    t = render(version, vl, args.output)
     print('Rendering time: {}'.format(t))
 
     # terminate
