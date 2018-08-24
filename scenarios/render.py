@@ -2,6 +2,7 @@
 
 import time
 import argparse
+import atexit
 import sys
 import os
 from xvfbwrapper import Xvfb
@@ -27,6 +28,8 @@ def init_environment(root):
     global Qt
     global QPainter
     global QgsMapRendererCustomPainterJob
+    global QgsMapLayerRegistry
+    global QgsProject
 
     try:
         from qgis.core import Qgis
@@ -42,9 +45,7 @@ def init_environment(root):
                                QgsMapLayerRegistry,
                                QgsApplication,
                                QgsMapSettings,
-                               QgsRectangle,
                                QgsMapRendererCustomPainterJob,
-                               QgsPalLayerSettings,
                                QgsCoordinateReferenceSystem)
 
         from qgis.gui import QgsMapCanvas
@@ -55,20 +56,22 @@ def init_environment(root):
     else:
         from qgis.core import (QgsDataSourceUri,
                                QgsVectorLayer,
+                               QgsProject,
                                QgsApplication,
                                QgsMapSettings,
                                QgsMapRendererCustomPainterJob,
                                QgsCoordinateReferenceSystem)
 
-    from qgis.gui import QgsMapCanvas
+        from qgis.gui import QgsMapCanvas
 
-    from PyQt5.QtCore import QSize, Qt
-    from PyQt5.QtGui import QImage, QPainter, QColor
-    from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QSize, Qt
+        from PyQt5.QtGui import QImage, QPainter, QColor
+        from PyQt5.QtWidgets import QApplication
 
     # init xvfb
     vdisplay = Xvfb()
     vdisplay.start()
+    atexit.register(vdisplay.stop)
 
     # init application
     app = QApplication([])
@@ -112,10 +115,10 @@ def render(version, vl, output):
     canvas.setDestinationCrs(crs)
 
     if version < 30000:
-        QgsMapLayerRegistry.instance().addMapLayer(vl)
-
+        QgsMapLayerRegistry.instance().addMapLayer(vl, False)
+        ms.setLayers([vl.id()])
     # QGIS 3 specific
-    if version >= 30000:
+    else:
         canvas.setLayers([vl])
         ms.setLayers([vl])
 
@@ -165,13 +168,10 @@ if __name__ == "__main__":
         app.exit()
         sys.exit(1)
 
-    print('Feature count: {}'.format(vl.featureCount()))
-
     # render
     t = render(version, vl, args.output)
-    print('Rendering time: {}'.format(t))
+    print('Rendering time: {} '.format(t))
 
     # terminate
     app.exit()
-    vdisplay.stop()
     sys.exit(0)

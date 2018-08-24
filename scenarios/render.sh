@@ -4,6 +4,9 @@
 PG_USER=root
 PG_PASSWORD=root
 PG_DB=data
+TABLE=vw_clc2006
+SCHEMA=ref
+GEOM=geoml93
 
 ROOT=$PWD
 if [ $# -eq 1 ]
@@ -32,13 +35,38 @@ do
 done
 
 # run script in each qgis container
-CMD="apt-get install -y python3-xvfbwrapper && cd /tmp && python3 render.py /usr/local postgres /tmp/coucou.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom geoml93 -schema ref -table hydro_bassin"
+CMD_PYTHON2="apt-get install -y python-qt4-sql python-xvfbwrapper && cd /tmp"
+
+CMD_PYTHON3="apt-get install -y python3-xvfbwrapper && cd /tmp"
+
+CMD=" render.py /usr/local postgres /tmp/render.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom $GEOM -schema $SCHEMA -table $TABLE"
+
+docker cp render.py qgisserver-perfsuite-2.14:/tmp
+TIME_2_14=$(docker exec -i qgisserver-perfsuite-2.14 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
+rm -f /tmp/render_2_14.png
+docker cp qgisserver-perfsuite-2.14:/tmp/render.png /tmp/render_2_14.png
+
+docker cp render.py qgisserver-perfsuite-2.18:/tmp
+TIME_2_18=$(docker exec -i qgisserver-perfsuite-2.18 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
+rm -f /tmp/render_2_18.png
+docker cp qgisserver-perfsuite-2.18:/tmp/render.png /tmp/render_2_18.png
 
 docker cp render.py qgisserver-perfsuite-3.0:/tmp
-docker exec -it qgisserver-perfsuite-3.0 /bin/sh -c "$CMD"
+TIME_3_0=$(docker exec -i qgisserver-perfsuite-3.0 /bin/sh -c "$CMD_PYTHON3 && python3 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
+rm -f /tmp/render_3_0.png
+docker cp qgisserver-perfsuite-3.0:/tmp/render.png /tmp/render_3_0.png
 
 docker cp render.py qgisserver-perfsuite-master:/tmp
-docker exec -it qgisserver-perfsuite-master /bin/sh -c "$CMD"
+TIME_MASTER=$(docker exec -i qgisserver-perfsuite-master /bin/sh -c "$CMD_PYTHON3 && python3 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
+rm -f /tmp/render_master.png
+docker cp qgisserver-perfsuite-master:/tmp/render.png /tmp/render_master.png
+
+echo "\n\n"
+echo "Rendering time for QGIS 2.14: $TIME_2_14"
+echo "Rendering time for QGIS 2.18: $TIME_2_18"
+echo "Rendering time for QGIS 3.0: $TIME_3_0"
+echo "Rendering time for QGIS Master: $TIME_MASTER"
+echo "\n\n"
 
 # clear containers
 cd $ROOT
