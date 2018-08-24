@@ -2,6 +2,48 @@ import time
 import argparse
 import sys
 import os
+from xvfbwrapper import Xvfb
+
+try:
+    from qgis.core import Qgis
+except ImportError:
+    from qgis.core import QGis as Qgis
+
+version = int(Qgis.QGIS_VERSION_INT)
+
+if version < 30000:
+    from qgis.core import (QgsDataSourceURI as QgsDataSourceUri,
+                           QgsVectorLayer,
+                           QgsProject,
+                           QgsMapLayerRegistry,
+                           QgsApplication,
+                           QgsMapSettings,
+                           QgsRectangle,
+                           QgsMapRendererCustomPainterJob,
+                           QgsPalLayerSettings,
+                           QgsCoordinateReferenceSystem)
+
+    from qgis.gui import QgsMapCanvas
+
+
+    from PyQt4.QtCore import QSize, Qt
+    from PyQt4.QtGui import QApplication, QImage, QPainter, QColor
+else:
+    from qgis.core import (QgsDataSourceUri,
+                           QgsVectorLayer,
+                           QgsProject,
+                           QgsApplication,
+                           QgsMapSettings,
+                           QgsRectangle,
+                           QgsMapRendererCustomPainterJob,
+                           QgsPalLayerSettings,
+                           QgsCoordinateReferenceSystem)
+
+    from qgis.gui import QgsMapCanvas
+
+    from PyQt5.QtCore import QSize, Qt
+    from PyQt5.QtGui import QImage, QPainter, QColor
+    from PyQt5.QtWidgets import QApplication
 
 
 def init_environment(root):
@@ -12,56 +54,20 @@ def init_environment(root):
 
     # LD_LIBRARY_PATH
     os.environ['LD_LIBRARY_PATH'] = '{}/lib'.format(root)
-    os.execv(sys.argv[0], sys.argv)
 
-    # Import
-    try:
-        from qgis.core import Qgis
-    except ImportError:
-        from qgis.core import QGis as Qgis
+    print(os.environ['LD_LIBRARY_PATH'])
+    # os.execv(sys.argv[0], sys.argv)
 
-    version = int(Qgis.QGIS_VERSION_INT)
-
-    if version < 30000:
-        from qgis.core import (QgsDataSourceURI as QgsDataSourceUri,
-                               QgsVectorLayer,
-                               QgsProject,
-                               QgsMapLayerRegistry,
-                               QgsApplication,
-                               QgsMapSettings,
-                               QgsRectangle,
-                               QgsMapRendererCustomPainterJob,
-                               QgsPalLayerSettings,
-                               QgsCoordinateReferenceSystem)
-
-        from qgis.gui import QgsMapCanvas
-
-
-        from PyQt4.QtCore import QSize, Qt
-        from PyQt4.QtGui import QApplication, QImage, QPainter, QColor
-    else:
-        from qgis.core import (QgsDataSourceUri,
-                               QgsVectorLayer,
-                               QgsProject,
-                               QgsApplication,
-                               QgsMapSettings,
-                               QgsRectangle,
-                               QgsMapRendererCustomPainterJob,
-                               QgsPalLayerSettings,
-                               QgsCoordinateReferenceSystem)
-
-        from qgis.gui import QgsMapCanvas
-
-        from PyQt5.QtCore import QSize, Qt
-        from PyQt5.QtGui import QImage, QPainter, QColor
-        from PyQt5.QtWidgets import QApplication
+    # init xvfb
+    vdisplay = Xvfb()
+    vdisplay.start()
 
     # init application
     app = QApplication([])
     QgsApplication.setPrefixPath(root, True)
     QgsApplication.initQgis()
 
-    return app, version
+    return app, vdisplay
 
 
 def layer(args):
@@ -74,7 +80,7 @@ def layer(args):
     return QgsVectorLayer( uri.uri(), "layer", provider)
 
 
-def render(version, vl, output):
+def render(vl, output):
 
     # init map setting
     ms = QgsMapSettings()
@@ -130,7 +136,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # init environment
-    app, version = init_environment(args.root)
+    app, vdisplay = init_environment(args.root)
 
     # get layer
     vl = layer(args)
@@ -143,9 +149,10 @@ if __name__ == "__main__":
     print('Feature count: {}'.format(vl.featureCount()))
 
     # render
-    time = render(version, vl, args.output)
-    print('Rendering time: {}'.format(time))
+    t = render(vl, args.output)
+    print('Rendering time: {}'.format(t))
 
     # terminate
     app.exit()
+    vdisplay.stop()
     sys.exit(0)
