@@ -80,12 +80,16 @@ def init_environment(root):
 
 def layer(args):
 
+    vl = None
     provider = args.provider
 
-    uri = QgsDataSourceUri()
-    uri.setConnection( "172.17.0.2", "5432", "data", "root", "root")
-    uri.setDataSource("ref", "hydro_bassin", "geoml93", "")
-    return QgsVectorLayer( uri.uri(), "layer", provider)
+    if provider == 'postgres':
+        uri = QgsDataSourceUri()
+        uri.setConnection(args.host, '5432', args.db, args.user, args.pwd)
+        uri.setDataSource(args.schema, args.table, args.geom, '')
+        vl = QgsVectorLayer(uri.uri(), 'layer', provider)
+
+    return vl
 
 
 def render(version, vl, output):
@@ -94,15 +98,16 @@ def render(version, vl, output):
     ms = QgsMapSettings()
 
     extent = vl.extent()
-    ms.setExtent( extent )
+    ms.setExtent(extent)
 
     size = QSize(1629, 800)
 
     crs = QgsCoordinateReferenceSystem("EPSG:2154")
-    ms.setOutputSize( size )
+    ms.setOutputSize(size)
     ms.setDestinationCrs(crs)
 
     # init a canvas object
+    parser.add_argument('host', type=str, help='Database host (postgres provider)')
     canvas = QgsMapCanvas()
     canvas.setDestinationCrs(crs)
 
@@ -115,7 +120,7 @@ def render(version, vl, output):
         ms.setLayers([vl])
 
     i = QImage(size, QImage.Format_RGB32)
-    i.fill( Qt.white )
+    i.fill(Qt.white)
     p = QPainter(i)
     j = QgsMapRendererCustomPainterJob(ms, p)
 
@@ -137,6 +142,16 @@ if __name__ == "__main__":
     parser.add_argument('root', type=str, help='QGIS installation root')
     parser.add_argument('provider', type=str, help='Provider')
     parser.add_argument('output', type=str, help='PNG output image')
+
+    # postgres provider args
+    parser.add_argument('-host', type=str, help='Database host (postgres)')
+    parser.add_argument('-db', type=str, help='Database name (postgres)')
+    parser.add_argument('-user', type=str, help='Database user (postgres)')
+    parser.add_argument('-pwd', type=str, help='Database password (postgres)')
+    parser.add_argument('-schema', type=str, help='Database schema (postgres)')
+    parser.add_argument('-table', type=str, help='Database table (postgres)')
+    parser.add_argument('-geom', type=str, help='Database geom (postgres)')
+
     args = parser.parse_args()
 
     # init environment
