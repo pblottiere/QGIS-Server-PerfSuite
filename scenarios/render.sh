@@ -32,7 +32,7 @@ do
 done
 
 # run script in each qgis container
-CMD="cd /tmp && python3 render.py /usr/local postgres /tmp/coucou.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom geoml93 -schema ref -table hydro_bassin"
+CMD="apt-get install -y python3-xvfbwrapper && cd /tmp && python3 render.py /usr/local postgres /tmp/coucou.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom geoml93 -schema ref -table hydro_bassin"
 
 docker cp render.py qgisserver-perfsuite-3.0:/tmp
 docker exec -it qgisserver-perfsuite-3.0 /bin/sh -c "$CMD"
