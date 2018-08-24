@@ -89,7 +89,7 @@ def layer(args):
     if provider == 'postgres':
         uri = QgsDataSourceUri()
         uri.setConnection(args.host, '5432', args.db, args.user, args.pwd)
-        uri.setDataSource(args.schema, args.table, args.geom, '')
+        uri.setDataSource(args.schema, args.table, args.geom, '', args.id)
         vl = QgsVectorLayer(uri.uri(), 'layer', provider)
 
     return vl
@@ -154,6 +154,7 @@ if __name__ == "__main__":
     parser.add_argument('-schema', type=str, help='Database schema (postgres)')
     parser.add_argument('-table', type=str, help='Database table (postgres)')
     parser.add_argument('-geom', type=str, help='Database geom (postgres)')
+    parser.add_argument('-id', type=str, help='Database id for views (postgres)')
 
     args = parser.parse_args()
 

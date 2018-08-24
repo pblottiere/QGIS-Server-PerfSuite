@@ -4,9 +4,10 @@
 PG_USER=root
 PG_PASSWORD=root
 PG_DB=data
-TABLE=vw_clc2006
+TABLE=hydro_lake
 SCHEMA=ref
 GEOM=geoml93
+VIEW_ID=none
 
 ROOT=$PWD
 if [ $# -eq 1 ]
@@ -39,7 +40,7 @@ CMD_PYTHON2="apt-get install -y python-qt4-sql python-xvfbwrapper && cd /tmp"
 
 CMD_PYTHON3="apt-get install -y python3-xvfbwrapper && cd /tmp"
 
-CMD=" render.py /usr/local postgres /tmp/render.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom $GEOM -schema $SCHEMA -table $TABLE"
+CMD=" render.py /usr/local postgres /tmp/render.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom $GEOM -schema $SCHEMA -table $TABLE -id $VIEW_ID"
 
 docker cp render.py qgisserver-perfsuite-2.14:/tmp
 TIME_2_14=$(docker exec -i qgisserver-perfsuite-2.14 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
