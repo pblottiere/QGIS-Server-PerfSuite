@@ -7,6 +7,17 @@ import sys
 import os
 from xvfbwrapper import Xvfb
 
+from graffiti.request import Request, Type, Host
+
+
+class RenderingParams(object):
+
+    def __init__(self):
+        self.crs = None
+        self.width = 1629
+        self.height = 800
+        self.format = "png"
+
 
 def init_environment(root):
 
@@ -78,7 +89,7 @@ def init_environment(root):
     QgsApplication.setPrefixPath(root, True)
     QgsApplication.initQgis()
 
-    return version, app, vdisplay
+    return version, app
 
 
 def layer(args):
@@ -88,14 +99,22 @@ def layer(args):
 
     if provider == 'postgres':
         uri = QgsDataSourceUri()
-        uri.setConnection(args.host, '5432', args.db, args.user, args.pwd)
-        uri.setDataSource(args.schema, args.table, args.geom, '', args.id)
+        uri.setConnection(args.pg_host, '5432', args.pg_db, args.pg_user, args.pg_pwd)
+        uri.setDataSource(args.pg_schema, args.pg_table, args.pg_geom, '', args.pg_id)
         vl = QgsVectorLayer(uri.uri(), 'layer', provider)
 
     return vl
 
 
-def render(version, vl, output):
+def render(version, args, config):
+
+    # get layer
+    vl = layer(args)
+
+    if not vl.isValid():
+        print('ERROR: Invalid layer')
+        app.exit()
+        sys.exit(1)
 
     # init map setting
     ms = QgsMapSettings()
@@ -103,9 +122,9 @@ def render(version, vl, output):
     extent = vl.extent()
     ms.setExtent(extent)
 
-    size = QSize(1629, 800)
+    size = QSize(config.width, config.height)
 
-    crs = QgsCoordinateReferenceSystem("EPSG:2154")
+    crs = QgsCoordinateReferenceSystem(config.crs)
     ms.setOutputSize(size)
     ms.setDestinationCrs(crs)
 
@@ -132,9 +151,26 @@ def render(version, vl, output):
     t = time.time() - start
 
     p.end()
-    i.save(output)
+    i.save(args.output)
 
     return t
+
+
+def server(args, config):
+
+    h = Host('master', args.server_host)
+    h.payload['MAP'] = '/data/data_perf.qgs'
+    h.payload['VERSION'] = '1.3.0'
+    h.payload['WIDTH'] = config.width
+    h.payload['HEIGHT'] = config.height
+    h.payload['SRS'] = config.crs
+    h.payload['FORMAT'] = config.format
+    h.payload['LAYERS'] = args.pg_table
+
+    r = Request('master', Type.GetMap, [h], iterations=2, title='', logdir='/tmp')
+    r.run()
+    
+    print(r.durations)
 
 
 if __name__ == "__main__":
@@ -146,32 +182,34 @@ if __name__ == "__main__":
     parser.add_argument('provider', type=str, help='Provider')
     parser.add_argument('output', type=str, help='PNG output image')
 
-    # postgres provider args
-    parser.add_argument('-host', type=str, help='Database host (postgres)')
-    parser.add_argument('-db', type=str, help='Database name (postgres)')
-    parser.add_argument('-user', type=str, help='Database user (postgres)')
-    parser.add_argument('-pwd', type=str, help='Database password (postgres)')
-    parser.add_argument('-schema', type=str, help='Database schema (postgres)')
-    parser.add_argument('-table', type=str, help='Database table (postgres)')
-    parser.add_argument('-geom', type=str, help='Database geom (postgres)')
-    parser.add_argument('-id', type=str, help='Database id for views (postgres)')
+    parser.add_argument('-pg-host', type=str, help='Database host (postgres)')
+    parser.add_argument('-pg-db', type=str, help='Database name (postgres)')
+    parser.add_argument('-pg-user', type=str, help='Database user (postgres)')
+    parser.add_argument('-pg-pwd', type=str, help='Database password (postgres)')
+    parser.add_argument('-pg-schema', type=str, help='Database schema (postgres)')
+    parser.add_argument('-pg-table', type=str, help='Database table (postgres)')
+    parser.add_argument('-pg-geom', type=str, help='Database geom (postgres)')
+    parser.add_argument('-pg-id', type=str, help='Database id for views (postgres)')
+
+    parser.add_argument('--server', action='store_true')
+    parser.add_argument('-server-host', type=str, help='QGIS Server host')
 
     args = parser.parse_args()
 
     # init environment
-    version, app, vdisplay = init_environment(args.root)
-
-    # get layer
-    vl = layer(args)
-
-    if not vl.isValid():
-        print('ERROR: Invalid layer')
-        app.exit()
-        sys.exit(1)
+    version, app = init_environment(args.root)
 
     # render
-    t = render(version, vl, args.output)
-    print('Rendering time: {} '.format(t))
+    c = RenderingParams()
+    c.crs = 'EPSG:2154'
+
+    t_headless = render(version, args, c)
+    print('Headless rendering time: {} '.format(t_headless))
+
+    # server rendering
+    if args.server:
+        t_server = server(args, c)
+        print('Server rendering time: {} '.format(t_server))
 
     # terminate
     app.exit()
