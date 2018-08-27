@@ -14,8 +14,8 @@ class RenderingParams(object):
 
     def __init__(self):
         self.crs = None
-        self.width = 1629
-        self.height = 800
+        self.width = 800
+        self.height = 600
         self.format = "png"
 
 
@@ -41,6 +41,7 @@ def init_environment(root):
     global QgsMapRendererCustomPainterJob
     global QgsMapLayerRegistry
     global QgsProject
+    global QgsRectangle
 
     try:
         from qgis.core import Qgis
@@ -55,6 +56,7 @@ def init_environment(root):
                                QgsProject,
                                QgsMapLayerRegistry,
                                QgsApplication,
+                               QgsRectangle,
                                QgsMapSettings,
                                QgsMapRendererCustomPainterJob,
                                QgsCoordinateReferenceSystem)
@@ -67,6 +69,7 @@ def init_environment(root):
     else:
         from qgis.core import (QgsDataSourceUri,
                                QgsVectorLayer,
+                               QgsRectangle,
                                QgsProject,
                                QgsApplication,
                                QgsMapSettings,
@@ -92,82 +95,103 @@ def init_environment(root):
     return version, app
 
 
-def layer(args):
+def layers(args, project):
 
-    vl = None
-    provider = args.provider
+    vls = []
 
-    if provider == 'postgres':
+    if args.pg:
         uri = QgsDataSourceUri()
         uri.setConnection(args.pg_host, '5432', args.pg_db, args.pg_user, args.pg_pwd)
         uri.setDataSource(args.pg_schema, args.pg_table, args.pg_geom, '', args.pg_id)
-        vl = QgsVectorLayer(uri.uri(), 'layer', provider)
+        vls.append(QgsVectorLayer(uri.uri(), 'layer', 'postgres'))
+    if args.qgs:
+        project.setFileName(args.qgs_file)
+        project.read()
 
-    return vl
+        if version < 30000:
+            vls.append(QgsMapLayerRegistry.instance().mapLayersByName(args.qgs_layer)[0])
+        else:
+            vls.append(project.mapLayersByName(args.qgs_layer)[0])
+
+    return vls
 
 
 def render(version, args, config):
 
-    # get layer
-    vl = layer(args)
-
-    if not vl.isValid():
-        print('ERROR: Invalid layer')
-        app.exit()
-        sys.exit(1)
-
-    # init map setting
-    ms = QgsMapSettings()
-
-    extent = vl.extent()
-    ms.setExtent(extent)
-
-    size = QSize(config.width, config.height)
-
-    crs = QgsCoordinateReferenceSystem(config.crs)
-    ms.setOutputSize(size)
-    ms.setDestinationCrs(crs)
-
-    # init a canvas object
-    parser.add_argument('host', type=str, help='Database host (postgres provider)')
-    canvas = QgsMapCanvas()
-    canvas.setDestinationCrs(crs)
-
+    durations = []
+    project = None
     if version < 30000:
-        QgsMapLayerRegistry.instance().addMapLayer(vl, False)
-        ms.setLayers([vl.id()])
-    # QGIS 3 specific
+        project = QgsProject.instance()
     else:
-        canvas.setLayers([vl])
-        ms.setLayers([vl])
+        project = QgsProject()
 
-    i = QImage(size, QImage.Format_RGB32)
-    i.fill(Qt.white)
-    p = QPainter(i)
-    j = QgsMapRendererCustomPainterJob(ms, p)
+    # get layers
+    vls = layers(args, project)
 
-    start = time.time()
-    j.renderSynchronously()
-    t = time.time() - start
+    index = 0
+    for vl in vls:
+        if not vl.isValid():
+            print('ERROR: Invalid layer')
+            app.exit()
+            sys.exit(1)
 
-    p.end()
-    i.save(args.output)
+        # init map setting
+        ms = QgsMapSettings()
 
-    return t
+        extent = vl.extent()
+        ms.setExtent(extent)
+
+        size = QSize(config.width, config.height)
+
+        crs = QgsCoordinateReferenceSystem(config.crs)
+        ms.setOutputSize(size)
+        ms.setDestinationCrs(crs)
+
+        # init a canvas object
+        canvas = QgsMapCanvas()
+        canvas.setDestinationCrs(crs)
+
+        if version < 30000:
+            QgsMapLayerRegistry.instance().addMapLayer(vl, False)
+            ms.setLayers([vl.id()])
+        # QGIS 3 specific
+        else:
+            canvas.setLayers([vl])
+            ms.setLayers([vl])
+
+        i = QImage(size, QImage.Format_RGB32)
+        i.fill(Qt.white)
+        p = QPainter(i)
+
+        j = QgsMapRendererCustomPainterJob(ms, p)
+
+        start = time.time()
+        j.renderSynchronously()
+        t = time.time() - start
+
+        p.end()
+        i.save('{}/headless_{}_{}.png'.format(args.outdir, index, vl.name()))
+
+        durations.append(t)
+
+        index += 1
+
+    return durations
 
 
 def server(args, config):
 
-    h = Host('master', args.server_host)
-    h.payload['MAP'] = '/data/data_perf.qgs'
+    h = Host('host', args.server_host)
+    h.payload['MAP'] = args.server_project
     h.payload['VERSION'] = '1.3.0'
     h.payload['WIDTH'] = config.width
     h.payload['HEIGHT'] = config.height
     h.payload['SRS'] = config.crs
     h.payload['FORMAT'] = config.format
-    h.payload['LAYERS'] = args.pg_table
+    h.payload['LAYERS'] = args.server_layer
+    h.payload['BBOX'] = args.extent
 
-    r = Request('master', Type.GetMap, [h], iterations=2, title='', logdir='/tmp')
+    r = Request('server', Type.GetMap, [h], iterations=2, title='', logdir='/tmp')
     r.run()
     
     print(r.durations)
@@ -179,9 +203,10 @@ if __name__ == "__main__":
     descr = 'Measure rendering time'
     parser = argparse.ArgumentParser(description=descr)
     parser.add_argument('root', type=str, help='QGIS installation root')
-    parser.add_argument('provider', type=str, help='Provider')
-    parser.add_argument('output', type=str, help='PNG output image')
+    parser.add_argument('extent', type=str, help='x0,y0,x1,y1 (in 4326 for now)')
+    parser.add_argument('outdir', type=str, help='PNG output directory')
 
+    parser.add_argument('--pg', action='store_true')
     parser.add_argument('-pg-host', type=str, help='Database host (postgres)')
     parser.add_argument('-pg-db', type=str, help='Database name (postgres)')
     parser.add_argument('-pg-user', type=str, help='Database user (postgres)')
@@ -191,8 +216,14 @@ if __name__ == "__main__":
     parser.add_argument('-pg-geom', type=str, help='Database geom (postgres)')
     parser.add_argument('-pg-id', type=str, help='Database id for views (postgres)')
 
+    parser.add_argument('--qgs', action='store_true')
+    parser.add_argument('--qgs-file', type=str, help='.qgs project')
+    parser.add_argument('--qgs-layer', type=str, help='.qgs layer name')
+
     parser.add_argument('--server', action='store_true')
     parser.add_argument('-server-host', type=str, help='QGIS Server host')
+    parser.add_argument('-server-layer', type=str, help='Layer name')
+    parser.add_argument('-server-project', type=str, help='.qgs project')
 
     args = parser.parse_args()
 
@@ -203,8 +234,9 @@ if __name__ == "__main__":
     c = RenderingParams()
     c.crs = 'EPSG:2154'
 
-    t_headless = render(version, args, c)
-    print('Headless rendering time: {} '.format(t_headless))
+    durations_headless = render(version, args, c)
+    for duration in durations_headless:
+        print('Headless rendering time: {} '.format(duration))
 
     # server rendering
     if args.server:

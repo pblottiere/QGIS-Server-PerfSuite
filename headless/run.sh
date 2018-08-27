@@ -36,80 +36,52 @@ do
   sleep 10
 done
 
-# run script in each qgis container
 rm -rf $OUTDIR
 mkdir -p $OUTDIR
 
-TIMEFORMAT=%R  # for time command
-
-CMD_GRAFFITI="git clone https://github.com/pblottiere/graffiti && cd graffiti && mkdir venv && virtualenv --system-site-packages -p /usr/bin/python3 ./venv && . venv/bin/activate && pip install -r requirements.txt && deactivate && cd -"
-
-CMD_PYTHON2="apt-get install -y python-qt4-sql python-xvfbwrapper && cd /tmp"
-
-CMD_PYTHON3="apt-get install -y virtualenv python3-virtualenv python3-xvfbwrapper python3-pip && cd /tmp && $CMD_GRAFFITI && cd /tmp/graffiti && cp /tmp/render.py . && . venv/bin/activate "
-
-CMD=" render.py /usr/local postgres /tmp/render.png -host $DOCKER_IP_DATA -db $PG_DB -user $PG_USER -pwd $PG_PASSWORD -geom $GEOM -schema $SCHEMA -table $TABLE -id $VIEW_ID"
-
 # QGIS 2.14
-# docker cp render.py qgisserver-perfsuite-2.14:/tmp
-# HEADLESS_2_14=$(docker exec -i qgisserver-perfsuite-2.14 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
-#HEADLESS_2_14=$(docker exec -i qgisserver-perfsuite-2.14 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD")
-# docker cp qgisserver-perfsuite-2.14:/tmp/render.png /tmp/render_2_14.png
+echo "QGIS 2.14"
+docker cp headless.py qgisserver-perfsuite-2.14:/tmp
+docker cp headless.sh qgisserver-perfsuite-2.14:/tmp
 
-# SERVER_CACHE_2_14=$( { time curl --silent "http://localhost:8088/qgisserver_2_14?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_2_14.png; } 2>&1)
-# SERVER_2_14=$( { time curl --silent "http://localhost:8088/qgisserver_2_14?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_2_14.png; } 2>&1 )
+docker exec -i qgisserver-perfsuite-2.14 /bin/bash -c "bash /tmp/headless.sh 2 $DOCKER_IP_DATA http://nginx/qgisserver_2_14" > $OUTDIR/2_14.log
+
+docker cp qgisserver-perfsuite-2.14:/tmp/headless_0_layer.png $OUTDIR/2_14_postgres_headless.png
+docker cp qgisserver-perfsuite-2.14:/tmp/headless_1_adress_ban.png $OUTDIR/2_14_qgs_headless.png
+docker cp qgisserver-perfsuite-2.14:/tmp/server_host.png $OUTDIR/2_14_server.png
 
 # QGIS 2.18
-# docker cp render.py qgisserver-perfsuite-2.18:/tmp
-# HEADLESS_2_18=$(docker exec -i qgisserver-perfsuite-2.18 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
-#HEADLESS_2_18=$(docker exec -i qgisserver-perfsuite-2.18 /bin/sh -c "$CMD_PYTHON2 && python2 $CMD")
-# docker cp qgisserver-perfsuite-2.18:/tmp/render.png /tmp/render_2_18.png
+echo "QGIS 2.18"
+docker cp headless.py qgisserver-perfsuite-2.18:/tmp
+docker cp headless.sh qgisserver-perfsuite-2.18:/tmp
 
-# SERVER_CACHE_2_18=$( { time curl --silent "http://localhost:8088/qgisserver_2_18?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_2_18.png; } 2>&1)
-# SERVER_2_18=$( { time curl --silent "http://localhost:8088/qgisserver_2_18?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_2_18.png; } 2>&1 )
+docker exec -i qgisserver-perfsuite-2.18 /bin/bash -c "bash /tmp/headless.sh 2 $DOCKER_IP_DATA http://nginx/qgisserver_2_18" > $OUTDIR/2_18.log
+
+docker cp qgisserver-perfsuite-2.18:/tmp/headless_0_layer.png $OUTDIR/2_18_postgres_headless.png
+docker cp qgisserver-perfsuite-2.18:/tmp/headless_1_adress_ban.png $OUTDIR/2_18_qgs_headless.png
+docker cp qgisserver-perfsuite-2.18:/tmp/server_host.png $OUTDIR/2_18_server.png
 
 # QGIS 3.0
-# docker cp render.py qgisserver-perfsuite-3.0:/tmp
-# HEADLESS_3_0=$(docker exec -i qgisserver-perfsuite-3.0 /bin/sh -c "$CMD_PYTHON3 && python3 $CMD" | sed -n "s/^.*Rendering time:\s*\(\S*\).*$/\1/p")
-#HEADLESS_3_0=$(docker exec -i qgisserver-perfsuite-3.0 /bin/sh -c "$CMD_PYTHON3 && python3 $CMD")
-# docker cp qgisserver-perfsuite-3.0:/tmp/render.png $OUTDIR/headless_3_0.png
+echo "QGIS 3.0"
+docker cp headless.py qgisserver-perfsuite-3.0:/tmp
+docker cp headless.sh qgisserver-perfsuite-3.0:/tmp
 
-# SERVER_CACHE_3_0=$( { time curl --silent "http://localhost:8088/qgisserver_3_0?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_3_0.png; } 2>&1)
-# SERVER_3_0=$( { time curl --silent "http://localhost:8088/qgisserver_3_0?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_3_0.png; } 2>&1 )
+docker exec -i qgisserver-perfsuite-3.0 /bin/sh -c "sh /tmp/headless.sh 3 $DOCKER_IP_DATA http://nginx/qgisserver_3_0" > $OUTDIR/3_0.log
+
+docker cp qgisserver-perfsuite-3.0:/tmp/headless_0_layer.png $OUTDIR/3_0_postgres_headless.png
+docker cp qgisserver-perfsuite-3.0:/tmp/headless_1_adress_ban.png $OUTDIR/3_0_qgs_headless.png
+docker cp qgisserver-perfsuite-3.0:/tmp/server_host.png $OUTDIR/3_0_server.png
 
 # QGIS MASTER
+echo "QGIS Master"
 docker cp headless.py qgisserver-perfsuite-master:/tmp
 docker cp headless.sh qgisserver-perfsuite-master:/tmp
 
-docker exec -i qgisserver-perfsuite-master /bin/sh -c "sh /tmp/headless.sh 3 $DOCKER_IP_DATA http://nginx/qgisserver_master"
+docker exec -i qgisserver-perfsuite-master /bin/sh -c "sh /tmp/headless.sh 3 $DOCKER_IP_DATA http://nginx/qgisserver_master" > $OUTDIR/master.log
 
-docker cp qgisserver-perfsuite-master:/tmp/headless.png $OUTDIR/master_headless.png
-docker cp qgisserver-perfsuite-master:/tmp/master_master.png $OUTDIR/master_server.png
-
-# HEADLESS_MASTER=$(docker exec -i qgisserver-perfsuite-master /bin/sh -c "$CMD_PYTHON3 && python3 $CMD")
-# docker cp qgisserver-perfsuite-master:/tmp/render.png $OUTDIR/headless_master.png
-
-# SERVER_CACHE_MASTER=$( { time curl --silent "http://localhost:8088/qgisserver_master?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_master.png; } 2>&1)
-# SERVER_MASTER=$( { time curl --silent "http://localhost:8088/qgisserver_master?MAP=/data/data_perf.qgs&SERVICE=WMS&REQUEST=GetMap&WIDTH=1629&HEIGHT=800&CRS=EPSG:2154&FORMAT=png&LAYER=$TABLE" > $OUTDIR/server_master.png; } 2>&1 )
-
-printf "\n\n"
-echo "Rendering time for QGIS 2.14:"
-echo "        - headless: $HEADLESS_2_14"
-echo "        - server 1st request: $SERVER_CACHE_2_14"
-echo "        - server 2nd request: $SERVER_2_14"
-echo "Rendering time for QGIS 2.18:"
-echo "        - headless: $HEADLESS_2_18"
-echo "        - server 1st request: $SERVER_CACHE_2_18"
-echo "        - server 2nd request: $SERVER_2_18"
-echo "Rendering time for QGIS 3.0:"
-echo "        - headless: $HEADLESS_3_0"
-echo "        - server 1st request: $SERVER_CACHE_3_0"
-echo "        - server 2nd request: $SERVER_3_0"
-echo "Rendering time for QGIS Master: "
-echo "        - headless: $HEADLESS_MASTER"
-echo "        - server 1st request: $SERVER_CACHE_MASTER"
-echo "        - server 2nd request: $SERVER_MASTER"
-printf "\n\n"
+docker cp qgisserver-perfsuite-master:/tmp/headless_0_layer.png $OUTDIR/master_postgres_headless.png
+docker cp qgisserver-perfsuite-master:/tmp/headless_1_adress_ban.png $OUTDIR/master_qgs_headless.png
+docker cp qgisserver-perfsuite-master:/tmp/server_host.png $OUTDIR/master_server.png
 
 # clear containers
 cd $ROOT
